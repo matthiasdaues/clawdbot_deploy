@@ -1,0 +1,62 @@
+name: Deploy Clawdbot
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          tags: tag:ci
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Deploy to server
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ${USER}@${HOST} << 'ENDSSH'
+            cd /opt/clawdbot
+            
+            # Pull latest image
+            docker compose pull
+            
+            # Restart with new image
+            docker compose up -d
+            
+            # Prune old images
+            docker image prune -f
+            
+            # Health check (wait up to 30s)
+            for i in {1..6}; do
+              if docker exec clawdbot node dist/index.js health 2>/dev/null; then
+                echo "✓ Health check passed"
+                exit 0
+              fi
+              echo "Waiting for gateway to start..."
+              sleep 5
+            done
+            
+            echo "✗ Health check failed"
+            docker compose logs --tail=50
+            exit 1
+          ENDSSH
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
