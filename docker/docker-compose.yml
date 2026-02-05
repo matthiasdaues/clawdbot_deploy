@@ -1,0 +1,22 @@
+services:
+  clawdbot-gateway:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    container_name: clawdbot
+    restart: unless-stopped
+    environment:
+      - HOME=/home/node
+      - NODE_ENV=production
+      - CLAWDBOT_GATEWAY_BIND=lan
+      - CLAWDBOT_GATEWAY_PORT=18789
+      - CLAWDBOT_GATEWAY_TOKEN=${CLAWDBOT_GATEWAY_TOKEN}
+    volumes:
+      - ${CLAWDBOT_CONFIG_DIR:-./data/.clawdbot}:/home/node/.clawdbot
+      - ${CLAWDBOT_WORKSPACE_DIR:-./data/workspace}:/home/node/clawd
+    ports:
+      - "127.0.0.1:18789:18789"
+    healthcheck:
+      test: ["CMD", "node", "dist/index.js", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

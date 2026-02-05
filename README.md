@@ -100,3 +100,27 @@ See individual guide sections for step-specific troubleshooting, or check:
 - [Build and Push](guide/04-build-and-push.md#troubleshooting) — Image build and registry issues
 - [GitHub Actions](guide/05-github-actions.md#troubleshooting) — Workflow failures
 - [Deploy and Verify](guide/07-deploy-and-verify.md#troubleshooting) — Runtime issues
+
+## Folder Structure
+
+```
+clawdbot_deploy/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+├── docker/
+│   ├── .env.example
+│   ├── Dockerfile
+│   ├── docker-bake.hcl
+│   └── docker-compose.yml
+├── guide/
+│   ├── 01-server-hardening.md
+│   ├── 02-docker-installation.md
+│   ├── 03-repository-setup.md
+│   ├── 04-build-and-push.md
+│   ├── 05-github-actions.md
+│   ├── 06-server-preparation.md
+│   └── 07-deploy-and-verify.md
+├── .gitignore
+└── README.md
+```

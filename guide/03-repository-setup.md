@@ -4,6 +4,8 @@
 
 Create the files needed to build and deploy Clawdbot from your GitHub repository.
 
+> **Quick start:** All files below are available ready-to-copy in the [`docker/`](../docker/) folder. Copy them to your repository root and update `GITHUB_REPOSITORY` in `.env.example`.
+
 ---
 
 ## Repository Structure
