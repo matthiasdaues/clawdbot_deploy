@@ -107,6 +107,7 @@ See individual guide sections for step-specific troubleshooting, or check:
 clawdbot_deploy/
 ├── .github/
 │   └── workflows/
+│       ├── build.yml
 │       └── deploy.yml
 ├── docker/
 │   ├── .env.example
