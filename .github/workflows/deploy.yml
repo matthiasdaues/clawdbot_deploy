@@ -1,18 +1,69 @@
-name: Deploy Clawdbot
+name: Build and Deploy Clawdbot
 
 on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      clawdbot_version:
+        description: 'Clawdbot version (branch/tag)'
+        required: false
+        default: 'main'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push with Bake
+        uses: docker/bake-action@v4
+        with:
+          files: docker/docker-bake.hcl
+          targets: clawdbot
+          push: true
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          REPOSITORY: ${{ env.IMAGE_NAME }}
+          TAG: ${{ steps.meta.outputs.version }}
+          CLAWDBOT_VERSION: ${{ inputs.clawdbot_version || 'main' }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Setup Tailscale
         uses: tailscale/github-action@v2
         with:
@@ -29,29 +80,37 @@ jobs:
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ${USER}@${HOST} << 'ENDSSH'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ${USER}@${HOST} << ENDSSH
             cd /opt/clawdbot
-            
+
+            # Login to GHCR
+            echo "${{ secrets.GHCR_DEPLOY_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_DEPLOY_USER }} --password-stdin
+
+            # Update image reference
+            export GITHUB_REPOSITORY="${IMAGE_NAME}"
+
             # Pull latest image
             docker compose pull
-            
+
             # Restart with new image
             docker compose up -d
-            
+
             # Prune old images
             docker image prune -f
-            
-            # Health check (wait up to 30s)
-            for i in {1..6}; do
+
+            # Health check (wait up to 60s)
+            echo "Waiting for gateway to start..."
+            for i in {1..12}; do
               if docker exec clawdbot node dist/index.js health 2>/dev/null; then
                 echo "✓ Health check passed"
                 exit 0
               fi
-              echo "Waiting for gateway to start..."
               sleep 5
             done
-            
+
             echo "✗ Health check failed"
             docker compose logs --tail=50
             exit 1

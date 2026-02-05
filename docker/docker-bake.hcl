@@ -19,7 +19,7 @@ group "default" {
 }
 
 target "clawdbot" {
-  context    = "."
+  context    = "docker/"
   dockerfile = "Dockerfile"
   
   args = {
