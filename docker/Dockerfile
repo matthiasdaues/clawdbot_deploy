@@ -35,9 +35,9 @@ ENV NODE_ENV=production
 ENV HOME=/home/node
 
 # Create non-root user directories
-RUN mkdir -p /home/node/.clawdbot /home/node/clawd \
+RUN mkdir -p /home/node/.openclaw /home/node/openclaw-workspace \
     && chown -R node:node /home/node
 
 USER node
 
-CMD ["node", "dist/index.js", "gateway"]
+CMD ["node", "dist/index.js", "gateway", "--allow-unconfigured"]
