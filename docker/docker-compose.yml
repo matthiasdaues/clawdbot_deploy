@@ -6,12 +6,12 @@ services:
     environment:
       - HOME=/home/node
       - NODE_ENV=production
-      - CLAWDBOT_GATEWAY_BIND=lan
-      - CLAWDBOT_GATEWAY_PORT=18789
-      - CLAWDBOT_GATEWAY_TOKEN=${CLAWDBOT_GATEWAY_TOKEN}
+      - OPENCLAW_GATEWAY_BIND=lan
+      - OPENCLAW_GATEWAY_PORT=18789
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
     volumes:
-      - ${CLAWDBOT_CONFIG_DIR:-./data/.clawdbot}:/home/node/.clawdbot
-      - ${CLAWDBOT_WORKSPACE_DIR:-./data/workspace}:/home/node/clawd
+      - ${OPENCLAW_CONFIG_DIR:-./data/.openclaw}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}:/home/node/openclaw-workspace
     ports:
       - "127.0.0.1:18789:18789"
     healthcheck:
