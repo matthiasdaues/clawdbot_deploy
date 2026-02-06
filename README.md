@@ -53,8 +53,11 @@ GitHub Actions
 6. [Server Deployment Preparation](guide/06-server-preparation.md)  
    Create deploy user, set up directories, generate gateway token, configure environment.
 
-7. [Deploy and Verify](guide/07-deploy-and-verify.md)  
+7. [Deploy and Verify](guide/07-deploy-and-verify.md)
    Trigger workflow, verify deployment, access gateway, configure channels.
+
+8. [OpenClaw Configuration](guide/08-openclaw-configuration.md)
+   Configure the gateway, authenticate with an AI provider, connect messaging channels, start using your assistant.
 
 ## Security Summary
 
@@ -121,7 +124,8 @@ clawdbot_deploy/
 │   ├── 04-build-and-push.md
 │   ├── 05-github-actions.md
 │   ├── 06-server-preparation.md
-│   └── 07-deploy-and-verify.md
+│   ├── 07-deploy-and-verify.md
+│   └── 08-openclaw-configuration.md
 ├── .gitignore
 └── README.md
 ```
