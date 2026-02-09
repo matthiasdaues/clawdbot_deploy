@@ -16,6 +16,7 @@ services:
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./data/.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}:/home/node/openclaw-workspace
+      - ${FILE_EXCHANGE_DIR:-./data/file_exchange}:/home/node/file_exchange
     ports:
       - "127.0.0.1:18789:18789"
     healthcheck:
