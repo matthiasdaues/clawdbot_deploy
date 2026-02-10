@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
     libcairo2 \
     libasound2 \
+    libxfixes3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Bun (required for build scripts)
