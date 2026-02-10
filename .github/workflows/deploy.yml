@@ -40,6 +40,18 @@ jobs:
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
             docker/docker-compose.yml ${USER}@${HOST}:/opt/clawdbot/
 
+      - name: Update server secrets
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          KEEPASS_MASTER_PW: ${{ secrets.KEEPASS_MASTER_PW }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ${USER}@${HOST} \
+            "sed -i '/^ANTHROPIC_API_KEY=/d; /^KEEPASS_MASTER_PW=/d' /opt/clawdbot/.env
+             echo \"ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}\" >> /opt/clawdbot/.env
+             echo \"KEEPASS_MASTER_PW=${KEEPASS_MASTER_PW}\" >> /opt/clawdbot/.env"
+
       - name: Deploy to server
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
