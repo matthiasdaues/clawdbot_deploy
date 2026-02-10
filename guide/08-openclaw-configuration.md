@@ -109,7 +109,16 @@ GITHUB_REPOSITORY=matthiasdaues/clawdbot_deploy
 
 OpenClaw reads its configuration from `~/.openclaw/openclaw.json` (JSON5 format — comments and trailing commas are allowed). Inside the container, this maps to the mounted volume.
 
-SSH to the server and create the config directory and file:
+**Important**: The container runs as user `node` (uid 1000), but the `deploy` user on the server is uid 1001. Files created by `deploy` are not writable by the container. Use a temporary Alpine container to set ownership after creating files:
+
+```bash
+# Fix ownership of the entire data directory
+docker run --rm -v /opt/clawdbot/data:/data alpine chown -R 1000:1000 /data
+```
+
+### Create the config directory and file
+
+SSH to the server and create the configuration:
 
 ```bash
 ssh -i ~/.ssh/clawdbot-deploy deploy@<tailscale-ip>
@@ -120,34 +129,34 @@ mkdir -p /opt/clawdbot/data/.openclaw
 # Create minimal configuration
 cat > /opt/clawdbot/data/.openclaw/openclaw.json << 'EOF'
 {
-  // Gateway settings
   "gateway": {
     "mode": "local",
     "port": 18789,
     "bind": "lan",
     "auth": {
       "mode": "token"
-      // Token is read from OPENCLAW_GATEWAY_TOKEN env var
     }
   },
-
-  // Agent / model settings
-  "agent": {
-    "model": "anthropic/claude-opus-4-6"
-  },
-
-  // Workspace
   "agents": {
     "defaults": {
+      "model": {
+        "primary": "anthropic/claude-opus-4-6"
+      },
       "workspace": "/home/node/openclaw-workspace"
     }
   }
 }
 EOF
 
-# Set ownership (container runs as node, uid 1000)
-sudo chown -R 1000:1000 /opt/clawdbot/data/
+# Fix ownership so the container's node user (uid 1000) can write
+docker run --rm -v /opt/clawdbot/data:/data alpine chown -R 1000:1000 /data
 ```
+
+**Config schema note**: OpenClaw's config schema evolves between versions. The `agent.model` key was replaced by `agents.defaults.model.primary`. If the gateway logs show "Legacy config keys detected", run `docker exec clawdbot node dist/index.js doctor --fix` or update the keys manually. The gateway will auto-migrate on load but will warn until the file is updated.
+
+### Why `gateway.auth.mode` matters
+
+Without `"auth": { "mode": "token" }` in the config, the gateway refuses to bind to non-loopback addresses — even if `OPENCLAW_GATEWAY_BIND=lan` is set via environment variable. The gateway enforces this as a safety measure to prevent accidental exposure without authentication. If you see the gateway binding to `ws://127.0.0.1:18789` instead of `ws://0.0.0.0:18789`, check that auth mode is configured.
 
 ---
 
@@ -177,16 +186,18 @@ If you use a Claude Pro or Max subscription instead of an API key:
 claude setup-token
 
 # Then paste into the container
-docker exec -it clawdbot openclaw models auth setup-token --provider anthropic
+docker exec -it clawdbot node dist/index.js models auth setup-token --provider anthropic
 ```
 
 ### Verify authentication
 
 ```bash
-docker exec clawdbot openclaw models status
+docker exec clawdbot node dist/index.js models status
 ```
 
 This should show your configured provider and model.
+
+**Note**: In our custom Docker image, the `openclaw` CLI binary is not in `$PATH`. Use `node dist/index.js <command>` instead. All `openclaw <command>` examples in this guide use this form for container execution.
 
 ---
 
@@ -225,25 +236,56 @@ docker exec clawdbot node dist/index.js health
 
 The gateway binds to `127.0.0.1` on the host (the `ports` directive in docker-compose.yml restricts this). Access it via an SSH tunnel.
 
-From your **local machine**:
+### Open the SSH tunnel
+
+From your **local machine**, open a tunnel and leave it running:
 
 ```bash
-ssh -L 18789:127.0.0.1:18789 -i ~/.ssh/clawdbot-deploy deploy@<tailscale-ip>
+ssh -L 18789:127.0.0.1:18789 -i ~/.ssh/clawdbot-deploy deploy@<tailscale-ip> -N
 ```
 
-Then open in your browser:
+The `-N` flag keeps the tunnel open without executing a remote command.
+
+### Get the dashboard URL
+
+The gateway token must be passed as a URL query parameter — there is no login form. Generate the dashboard URL from the server:
+
+```bash
+docker exec clawdbot node dist/index.js dashboard --no-open
+```
+
+This outputs a URL like:
 
 ```
-http://127.0.0.1:18789
+http://127.0.0.1:18789/?token=<your-gateway-token>
 ```
 
-Enter your gateway token when prompted. The dashboard provides:
+Open that URL in your browser with the SSH tunnel active.
+
+### Approve device pairing
+
+On first connection, the Control UI registers as a new device. The gateway requires explicit approval before allowing access. You will see `disconnected (1008): pairing required` in the dashboard.
+
+List pending devices and approve:
+
+```bash
+# List devices (shows pending and paired)
+docker exec clawdbot node dist/index.js devices list
+
+# Approve the pending request (use the Request ID from the list)
+docker exec clawdbot node dist/index.js devices approve <request-id>
+```
+
+After approval, the dashboard connects automatically. The device remains paired across restarts as long as the config volume is preserved.
+
+### Dashboard features
 
 - Live session view
 - Model and provider status
 - Channel connection status
 - Configuration editor
 - Logs viewer
+- WebChat (direct conversation with the agent)
 
 ---
 
@@ -254,7 +296,7 @@ Channels connect OpenClaw to messaging platforms. Configure them via the CLI ins
 ### Interactive Setup
 
 ```bash
-docker exec -it clawdbot openclaw channels login
+docker exec -it clawdbot node dist/index.js channels login
 ```
 
 This walks through channel selection and credential entry.
@@ -266,7 +308,7 @@ This walks through channel selection and credential entry.
 3. Add the channel:
 
 ```bash
-docker exec -it clawdbot openclaw channels add --channel telegram --token "<bot-token>"
+docker exec -it clawdbot node dist/index.js channels add --channel telegram --token "<bot-token>"
 ```
 
 Or add to `openclaw.json`:
@@ -287,7 +329,7 @@ Or add to `openclaw.json`:
 ### WhatsApp
 
 ```bash
-docker exec -it clawdbot openclaw channels add --channel whatsapp
+docker exec -it clawdbot node dist/index.js channels add --channel whatsapp
 ```
 
 This displays a QR code in the terminal. Scan it with WhatsApp on your phone (Linked Devices).
@@ -299,13 +341,13 @@ This displays a QR code in the terminal. Scan it with WhatsApp on your phone (Li
 3. Add the channel:
 
 ```bash
-docker exec -it clawdbot openclaw channels add --channel discord --token "<bot-token>"
+docker exec -it clawdbot node dist/index.js channels add --channel discord --token "<bot-token>"
 ```
 
 ### Slack
 
 ```bash
-docker exec -it clawdbot openclaw channels add --channel slack \
+docker exec -it clawdbot node dist/index.js channels add --channel slack \
   --bot-token "xoxb-..." \
   --app-token "xapp-..."
 ```
@@ -319,7 +361,7 @@ By default, OpenClaw uses a **pairing policy** for direct messages: unknown send
 ### Approve a sender
 
 ```bash
-docker exec -it clawdbot openclaw pairing approve <channel> <code>
+docker exec -it clawdbot node dist/index.js pairing approve <channel> <code>
 ```
 
 ### Allow specific senders in config
@@ -389,7 +431,15 @@ In group chats, OpenClaw defaults to **mention-only** mode — it only responds 
 ### Health check
 
 ```bash
-docker exec clawdbot openclaw doctor
+docker exec clawdbot node dist/index.js health
+```
+
+This shows agent status, heartbeat interval, and session count.
+
+For a deeper diagnostic:
+
+```bash
+docker exec clawdbot node dist/index.js doctor
 ```
 
 This checks configuration validity, provider authentication, channel connections, and reports any issues.
@@ -442,21 +492,27 @@ Review the [CVE-2026-25253](https://github.com/openclaw/openclaw/issues?q=CVE-20
 
 ### Useful CLI Commands
 
+All commands use `node dist/index.js` because the `openclaw` binary is not in `$PATH` in our custom image.
+
 ```bash
-# Check overall status
-docker exec clawdbot openclaw doctor
+# Check overall health
+docker exec clawdbot node dist/index.js health
+
+# Run diagnostics
+docker exec clawdbot node dist/index.js doctor
 
 # List connected channels
-docker exec clawdbot openclaw channels login
+docker exec -it clawdbot node dist/index.js channels login
 
 # Check model authentication
-docker exec clawdbot openclaw models status
+docker exec clawdbot node dist/index.js models status
 
-# Restart gateway (from inside container)
-docker exec clawdbot openclaw gateway restart
+# List and approve devices
+docker exec clawdbot node dist/index.js devices list
+docker exec clawdbot node dist/index.js devices approve <request-id>
 
-# Update OpenClaw
-docker exec clawdbot openclaw update --channel stable
+# Generate dashboard URL
+docker exec clawdbot node dist/index.js dashboard --no-open
 ```
 
 ---
@@ -468,10 +524,13 @@ docker exec clawdbot openclaw update --channel stable
 | Dockerfile updated (`.openclaw` dirs, `--allow-unconfigured`) | ☐ |
 | docker-compose.yml updated (`OPENCLAW_*` env vars, volume paths) | ☐ |
 | `.env` on server updated | ☐ |
-| `openclaw.json` created in config volume | ☐ |
+| Data directory ownership set to uid 1000 | ☐ |
+| `openclaw.json` created with correct schema | ☐ |
 | AI provider authenticated | ☐ |
 | Gateway starts and passes health check | ☐ |
-| Web dashboard accessible via SSH tunnel | ☐ |
+| Gateway binds to `ws://0.0.0.0:18789` (not loopback) | ☐ |
+| SSH tunnel opened, dashboard URL loaded | ☐ |
+| Device pairing approved | ☐ |
 | At least one channel connected | ☐ |
 | DM policy configured | ☐ |
 

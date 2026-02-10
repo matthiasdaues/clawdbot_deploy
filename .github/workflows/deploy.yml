@@ -65,6 +65,10 @@ jobs:
             # Prune old images
             docker image prune -f
 
+            # Restore git credential helper (config is in /home/node, not on a volume)
+            docker exec clawdbot git config --global credential.helper \
+              "store --file=/home/node/.openclaw/.git-credentials"
+
             # Health check (wait up to 60s)
             echo "Waiting for gateway to start..."
             for i in {1..12}; do

@@ -9,9 +9,14 @@ services:
       - OPENCLAW_GATEWAY_BIND=lan
       - OPENCLAW_GATEWAY_PORT=18789
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      - GIT_AUTHOR_NAME=OpenClaw Agent
+      - GIT_AUTHOR_EMAIL=openclaw@datenschoenheit.dev
+      - GIT_COMMITTER_NAME=OpenClaw Agent
+      - GIT_COMMITTER_EMAIL=openclaw@datenschoenheit.dev
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./data/.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}:/home/node/openclaw-workspace
+      - ${FILE_EXCHANGE_DIR:-./data/file_exchange}:/home/node/file_exchange
     ports:
       - "127.0.0.1:18789:18789"
     healthcheck:
